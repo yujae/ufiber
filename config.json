@@ -1,23 +1,23 @@
 {
-  "JwtSigningKey"       : "JwtSigningKey",
-  "ActivateKey"         : "zm!uiq19!82p&jq@7u_(+_bcc(#!v3ah",
+  "JwtSigningKey"       : "Jwt",
+  "ActivateKey"         : "zm!uiq",
   "AccessKeyExpiredSec" : 600,
   "RefreshKeyExpiredSec": 3600,
   "DB" : [
     {
       "ID"              : "localDB",
       "DriverName"      : "postgres",
-      "URL"             : "postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable"
+      "URL"             : "postgres://postgres:id@pw:5432/postgres?sslmode=disable"
     }
   ],
   "Mail" : [
     {
-      "Host"            : "mail.dyonbe.com", 
+      "Host"            : "mail.test.com",
       "Port"            : "587",
       "ID"              : "master",
-      "PW"              : "Dyonbe!82",
-      "FromName"        : "Dyonbe",
-      "FromMail"        : "master@dyonbe.com"
+      "PW"              : "pw",
+      "FromName"        : "Test",
+      "FromMail"        : "master@test.com"
     }
   ]
 }
