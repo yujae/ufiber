@@ -13,7 +13,6 @@ import (
 )
 
 // 인증 서버
-
 // 클라이언트 (브라우저)
 // cookie 저장 HTTPONLY, secure 조치 필요
 
