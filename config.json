@@ -7,7 +7,7 @@
     {
       "ID"              : "localDB",
       "DriverName"      : "postgres",
-      "URL"             : "postgres://postgres:id@pw:5432/postgres?sslmode=disable"
+      "URL"             : "postgres://id:pw@localhost:5432/postgres?sslmode=disable"
     }
   ],
   "Mail" : [
