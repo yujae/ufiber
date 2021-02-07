@@ -1,66 +1,98 @@
 package main
 
 import (
-	jwt "github.com/form3tech-oss/jwt-go"
+	"database/sql"
+	"fmt"
 	"github.com/gofiber/fiber/v2"
 	jwtware "github.com/gofiber/jwt/v2"
-	"time"
+	_ "github.com/lib/pq"
+	"log"
+	"ufiber/handler"
+	"ufiber/repository"
+	"ufiber/usecase"
 )
 
+// 인증 서버
+
+// 클라이언트 (브라우저)
+// cookie 저장 HTTPONLY, secure 조치 필요
+
 func main() {
-	app := fiber.New()
+	app, db := setup()
+	defer db.Close()
 
-	// Login route
-	app.Post("/login", login)
+	userR := repository.NewUserR(db)
+	userHistoryR := repository.NewUserHistoryR(db)
 
-	// Unauthenticated route
-	app.Get("/", accessible)
+	userU := usecase.NewUserU(userR, userHistoryR)
+	userH := handler.NewUserH(userU)
+	userH.Router(app.Group("/"))
 
-	// JWT Middleware
+	log.Fatal(app.Listen(":80"))
+}
+
+func setup() (*fiber.App, *sql.DB) {
+	conf, err := NewConfig("config.json")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	URL := fmt.Sprintf("%s", conf.DB[0].URL)
+	db, err := sql.Open(conf.DB[0].DriverName, URL) // DB 설정
+	if db != nil {
+		db.SetMaxIdleConns(10)
+		db.SetMaxOpenConns(10)
+	}
+	if err != nil {
+		log.Fatalf("sql.Open() Error : %v", err)
+	}
+	err = db.Ping()
+	if err != nil {
+		log.Fatalf("db.Ping() Error : %v", err)
+	}
+
+	app := fiber.New(fiber.Config{
+		StrictRouting: true, // 허용: /foo, 불허:/foo/
+		CaseSensitive: true, // 대소문자 구분
+		//Immutable: true,				// Default: false
+		ErrorHandler: nil, // Default: DefaultErrorHandler
+	})
+
 	app.Use(jwtware.New(jwtware.Config{
-		SigningKey: []byte("secret"),
+		Filter:         skip,                       // For Skip, Filtering Func
+		SuccessHandler: nil,                        // SuccessHandler Func
+		ErrorHandler:   nil,                        // ErrorHandler Func
+		SigningKey:     []byte(conf.JwtSigningKey), // Require
+		SigningMethod:  "",                         // Default: "HS256" (HS384, HS512, ES256, ES384, ES512, RS256, RS384, RS512)
+		ContextKey:     "",                         // Default: "user"
+		Claims:         nil,                        // Default: jwt.MapClaims{}
+		TokenLookup:    "",                         // Default: "header:Authorization" (query:<name>, param:<name>, cookie:<name>)
+		AuthScheme:     "",                         // Default: "Bearer"
 	}))
 
-	// Restricted Routes
-	app.Get("/restricted", restricted)
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("JwtSigningKey", conf.JwtSigningKey)
+		c.Locals("ActivateKey", conf.ActivateKey)
+		c.Locals("AccessKeyExpiredSec", conf.AccessKeyExpiredSec)
+		c.Locals("RefreshKeyExpiredSec", conf.RefreshKeyExpiredSec)
 
-	app.Listen(":80")
+		c.Locals("Mail.Host", conf.Mail[0].Host)
+		c.Locals("Mail.Port", conf.Mail[0].Port)
+		c.Locals("Mail.ID", conf.Mail[0].ID)
+		c.Locals("Mail.PW", conf.Mail[0].PW)
+		c.Locals("Mail.FromName", conf.Mail[0].FromName)
+		c.Locals("Mail.FromMail", conf.Mail[0].FromMail)
+		return c.Next()
+	})
+
+	return app, db
 }
 
-func login(c *fiber.Ctx) error {
-	user := c.FormValue("user")
-	pass := c.FormValue("pass")
-
-	// Throws Unauthorized error
-	if user != "john" || pass != "doe" {
-		return c.SendStatus(fiber.StatusUnauthorized)
+func skip(c *fiber.Ctx) bool {
+	if c.Method() == "POST" {
+		if c.Path() == "/login" || c.Path() == "/register" {
+			return true
+		}
 	}
-
-	// Create token
-	token := jwt.New(jwt.SigningMethodHS256)
-
-	// Set claims
-	claims := token.Claims.(jwt.MapClaims)
-	claims["name"] = "John Doe"
-	claims["admin"] = true
-	claims["exp"] = time.Now().Add(time.Hour * 72).Unix()
-
-	// Generate encoded token and send it as response.
-	t, err := token.SignedString([]byte("secret"))
-	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-
-	return c.JSON(fiber.Map{"token": t})
-}
-
-func accessible(c *fiber.Ctx) error {
-	return c.SendString("Accessible")
-}
-
-func restricted(c *fiber.Ctx) error {
-	user := c.Locals("user").(*jwt.Token)
-	claims := user.Claims.(jwt.MapClaims)
-	name := claims["name"].(string)
-	return c.SendString("Welcome " + name)
+	return false
 }
