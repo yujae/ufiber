@@ -7,6 +7,7 @@ import (
 	jwtware "github.com/gofiber/jwt/v2"
 	_ "github.com/lib/pq"
 	"log"
+	"strings"
 	"ufiber/handler"
 	"ufiber/repository"
 	"ufiber/usecase"
@@ -27,7 +28,7 @@ func main() {
 	userH := handler.NewUserH(userU)
 	userH.Router(app.Group("/"))
 
-	log.Fatal(app.Listen(":80"))
+	log.Fatal(app.Listen(":8001"))
 }
 
 func setup() (*fiber.App, *sql.DB) {
@@ -70,6 +71,7 @@ func setup() (*fiber.App, *sql.DB) {
 	}))
 
 	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("Home", conf.Home)
 		c.Locals("JwtSigningKey", conf.JwtSigningKey)
 		c.Locals("ActivateKey", conf.ActivateKey)
 		c.Locals("AccessKeyExpiredSec", conf.AccessKeyExpiredSec)
@@ -89,7 +91,14 @@ func setup() (*fiber.App, *sql.DB) {
 
 func skip(c *fiber.Ctx) bool {
 	if c.Method() == "POST" {
-		if c.Path() == "/login" || c.Path() == "/register" {
+		if c.Path() == "/login" ||
+			c.Path() == "/register" {
+			return true
+		}
+	}
+
+	if c.Method() == "GET" {
+		if strings.HasPrefix(c.Path(), "/active/") {
 			return true
 		}
 	}

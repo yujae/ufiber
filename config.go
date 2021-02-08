@@ -7,6 +7,7 @@ import (
 )
 
 type Config struct {
+	Home                 string
 	JwtSigningKey        string
 	ActivateKey          string
 	AccessKeyExpiredSec  int

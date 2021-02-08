@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"github.com/form3tech-oss/jwt-go"
 	"github.com/gofiber/fiber/v2"
 	"ufiber/usecase"
 )
@@ -18,7 +17,7 @@ func (u *userH) Router(router fiber.Router) {
 	router.Post("/register", u.register)
 	router.Post("/login", u.login)
 	router.Post("/refresh", u.reToken)
-	router.Get("/", accessible)
+	router.Get("/active/:ActiveKey", u.active)
 }
 
 func (u *userH) register(c *fiber.Ctx) error {
@@ -33,9 +32,6 @@ func (u *userH) reToken(c *fiber.Ctx) error {
 	return u.userI.ReToken(c)
 }
 
-func accessible(c *fiber.Ctx) error {
-	user := c.Locals("user").(*jwt.Token)
-	claims := user.Claims.(jwt.MapClaims)
-	id := claims["id"].(string)
-	return c.SendString("Welcome " + id)
+func (u *userH) active(c *fiber.Ctx) error {
+	return u.userI.Active(c)
 }

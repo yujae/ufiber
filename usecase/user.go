@@ -17,6 +17,7 @@ type UserI interface {
 	Register(*fiber.Ctx) error
 	Login(*fiber.Ctx) error
 	ReToken(*fiber.Ctx) error
+	Active(*fiber.Ctx) error
 }
 
 type userU struct {
@@ -33,9 +34,9 @@ func NewUserU(userI repository.UserI, userHistoryI repository.UserHistoryI) *use
 func (u *userU) Register(c *fiber.Ctx) error {
 	input := &model.User{}
 	activekey := uuid.NewString()
-	input.NICK = strings.Replace(activekey, "-", "", -1)
 	input.ACTIVEKEY = strings.Replace(activekey, "-", "", -1)
 
+	// JSON Unmarchal
 	err := json.Unmarshal(c.Body(), &input)
 	if err != nil {
 		if er := u.userHistoryI.Create(&model.UserHistory{USER_ID: input.ID, MSG: err.Error()}); er != nil {
@@ -44,10 +45,27 @@ func (u *userU) Register(c *fiber.Ctx) error {
 		return c.JSON(NewError(err))
 	}
 
+	// Email 검증
 	if !isEmailValid(input.ID) {
 		return c.JSON(NewError(ErrInvalidEmail))
 	}
 
+	// Nick 검증
+	if len(input.NICK) < 3 {
+		return c.JSON(NewError(ErrNickTooShort))
+	}
+	result, err := u.userI.RetrieveWithNick(input.NICK)
+	if err != nil {
+		if er := u.userHistoryI.Create(&model.UserHistory{USER_ID: input.ID, MSG: err.Error()}); er != nil {
+			return c.JSON(NewError(er))
+		}
+		//return c.JSON(NewError(ErrNickAlreadyExists))
+	}
+	if (model.User{}) != result {
+		return c.JSON(NewError(ErrNickAlreadyExists))
+	}
+
+	// 비밀번호 암호화 & 생성
 	genPW, err := bcrypt.GenerateFromPassword([]byte(input.PW), 10)
 	if err != nil {
 		if er := u.userHistoryI.Create(&model.UserHistory{USER_ID: input.ID, MSG: err.Error()}); er != nil {
@@ -57,6 +75,7 @@ func (u *userU) Register(c *fiber.Ctx) error {
 	}
 	input.PW = string(genPW)
 
+	// User 생성
 	err = u.userI.Create(input)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate") {
@@ -68,13 +87,15 @@ func (u *userU) Register(c *fiber.Ctx) error {
 		return c.JSON(NewError(err))
 	}
 
+	//TODO:: toMail 변경해야함.. (master@dyonbe.com -> input.ID)
+	home := c.Locals("Home").(string)
 	err = SendMail(c, Mail{
 		fromName: c.Locals("Mail.FromName").(string),
 		fromMail: c.Locals("Mail.FromMail").(string),
 		toName:   "",
 		toMail:   "master@dyonbe.com", //input.ID,
 		subject:  "[Dyonbe] 가입 확인 메일입니다.",
-		body:     "클릭해주십시오. <a href='https://api.dyonbe.com/activate/" + input.ACTIVEKEY + "'>가입 확인</a>",
+		body:     "클릭해주십시오. <a href='https://api." + home + "/activate/" + input.ACTIVEKEY + "'>가입 확인</a>",
 	})
 	if err != nil {
 		if er := u.userHistoryI.Create(&model.UserHistory{USER_ID: input.ID, MSG: err.Error()}); er != nil {
@@ -90,7 +111,29 @@ func (u *userU) Register(c *fiber.Ctx) error {
 	return c.JSON(input)
 }
 
-func (u userU) Login(c *fiber.Ctx) error {
+func (u *userU) Active(c *fiber.Ctx) error {
+	activeKey := c.Params("ActiveKey")
+	result, err := u.userI.UpdateActive(activeKey)
+	if err != nil {
+		if er := u.userHistoryI.Create(&model.UserHistory{USER_ID: "", MSG: err.Error()}); er != nil {
+			return c.JSON(NewError(er))
+		}
+		return c.JSON(NewError(err))
+	}
+
+	rowCount, err := result.RowsAffected()
+	if err != nil {
+		return c.JSON(NewError(err))
+	}
+	if rowCount == 0 {
+		return c.JSON(NewError(ErrActiveKeyNotFound))
+	}
+
+	home := c.Locals("Home").(string)
+	return c.Redirect("https://" + home)
+}
+
+func (u *userU) Login(c *fiber.Ctx) error {
 	//curl -v -X POST -H "User-Agent: linux bla bla" -H "Content-Type: application/json" -d " {\"id\":\"1\",\"pw\":\"1\"} " http://localhost/login
 	input := &model.User{}
 
@@ -203,7 +246,7 @@ func genToken(c *fiber.Ctx, u model.User) (fiber.Map, error) {
 }
 
 func isEmailValid(e string) bool {
-	if len(e) < 3 && len(e) > 254 {
+	if len(e) < 5 && len(e) > 254 {
 		return false
 	}
 	return emailRegex.MatchString(e)

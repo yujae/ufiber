@@ -8,9 +8,10 @@ import (
 type UserI interface {
 	Create(*model.User) error
 	Retrieve(string) (model.User, error)
+	RetrieveWithNick(string) (model.User, error)
 	UpdatePw(*model.User) error
 	UpdateNick(*model.User) error
-	UpdateActive(string, string) error
+	UpdateActive(string) (sql.Result, error)
 	UpdateLogin(string) error
 	Delete(string) error
 }
@@ -25,7 +26,7 @@ func NewUserR(db *sql.DB) *userR {
 
 func (db *userR) Create(u *model.User) error {
 	_, err := db.Exec("insert into public.user (id, pw, nick, joined, activekey) "+
-		"values ($1, $2, $3, $4, current_timestamp)", u.ID, u.PW, u.NICK, u.ACTIVEKEY)
+		"values ($1, $2, $3, current_timestamp, $4)", u.ID, u.PW, u.NICK, u.ACTIVEKEY)
 	if err != nil {
 		return err
 	}
@@ -34,6 +35,14 @@ func (db *userR) Create(u *model.User) error {
 func (db *userR) Retrieve(id string) (model.User, error) {
 	var user model.User
 	err := db.QueryRow("SELECT id, pw, nick, active FROM public.user WHERE ID = $1", id).Scan(&user.ID, &user.PW, &user.NICK, &user.ACTIVE)
+	if err != nil {
+		return user, err
+	}
+	return user, nil
+}
+func (db *userR) RetrieveWithNick(nick string) (model.User, error) {
+	var user model.User
+	err := db.QueryRow("SELECT id, pw, nick, active FROM public.user WHERE NICK = $1", nick).Scan(&user.ID, &user.PW, &user.NICK, &user.ACTIVE)
 	if err != nil {
 		return user, err
 	}
@@ -53,12 +62,12 @@ func (db *userR) UpdateNick(u *model.User) error {
 	}
 	return nil
 }
-func (db *userR) UpdateActive(id string, activekey string) error {
-	_, err := db.Exec("update public.user set active=true, activated=current_timestamp where id=$1 and activekey=$2", id, activekey)
+func (db *userR) UpdateActive(activekey string) (sql.Result, error) {
+	r, err := db.Exec("update public.user set active=true, activekey=null, activated=current_timestamp where activekey=$1", activekey)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	return r, nil
 }
 func (db *userR) UpdateLogin(id string) error {
 	_, err := db.Exec("update public.user set login=current_timestamp where id=$1", id)
