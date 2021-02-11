@@ -55,7 +55,7 @@ func (u *userU) Register(c *fiber.Ctx) error {
 		return c.JSON(NewError(ErrNickTooShort))
 	}
 	result, err := u.userI.RetrieveWithNick(input.NICK)
-	if err != nil {
+	if err != nil && !strings.Contains(err.Error(), "no row") {
 		if er := u.userHistoryI.Create(&model.UserHistory{USER_ID: input.ID, MSG: err.Error()}); er != nil {
 			return c.JSON(NewError(er))
 		}
@@ -94,7 +94,7 @@ func (u *userU) Register(c *fiber.Ctx) error {
 		fromMail: c.Locals("Mail.FromMail").(string),
 		toName:   "",
 		toMail:   "master@dyonbe.com", //input.ID,
-		subject:  "[Dyonbe] 가입 확인 메일입니다.",
+		subject:  "[" + home + "] " + "가입 확인 메일입니다.",
 		body:     "클릭해주십시오. <a href='https://api." + home + "/activate/" + input.ACTIVEKEY + "'>가입 확인</a>",
 	})
 	if err != nil {
