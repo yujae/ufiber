@@ -87,13 +87,12 @@ func (u *userU) Register(c *fiber.Ctx) error {
 		return c.JSON(NewError(err))
 	}
 
-	//TODO:: toMail 변경해야함.. (master@dyonbe.com -> input.ID)
 	home := c.Locals("Home").(string)
 	err = SendMail(c, Mail{
 		fromName: c.Locals("Mail.FromName").(string),
 		fromMail: c.Locals("Mail.FromMail").(string),
 		toName:   "",
-		toMail:   "master@dyonbe.com", //input.ID,
+		toMail:   input.ID,
 		subject:  "[" + home + "] " + "가입 확인 메일입니다.",
 		body:     "클릭해주십시오. <a href='https://api." + home + "/activate/" + input.ACTIVEKEY + "'>가입 확인</a>",
 	})
